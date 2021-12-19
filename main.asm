@@ -1,171 +1,115 @@
-;*******************************************************************
-;* This stationery serves as the framework for a user application. *
-;* For a more comprehensive program that demonstrates the more     *
-;* advanced functionality of this processor, please see the        *
-;* demonstration applications, located in the examples             *
-;* subdirectory of the "Freescale CodeWarrior for HC08" program    *
-;* directory.                                                      *
-;*******************************************************************
+;*******************************************************************************
+; This stationery serves as the framework for a user application.
+; For a more comprehensive program that demonstrates the more advanced
+; functionality of this processor, please see the demonstration applications,
+; located in the examples subdirectory of the 'Freescale CodeWarrior for HC08'
+; program directory.
+;*******************************************************************************
 
-; Include derivative-specific definitions
-            INCLUDE 'derivative.inc'
-            
-;
-; export symbols
-;
-            XDEF _Startup
-            ABSENTRY _Startup
+                    #Uses     qe32.inc
 
-;
-; variable/data section
-;
-            ORG    RAMStart         ; Insert your data definition here
-parita: 	DS.B   1
+;*******************************************************************************
+                    #RAM
+;*******************************************************************************
 
-;
-; code section
-;
-            ORG    ROMStart
-data1:		DC.B	$42, $80, $c1, $03, $c4
-end1:
-delka1:		EQU		end1-data1
+parity              rmb       1
 
-data2:		DC.B	60, 125, 254, 255
-end2:  
-delka2:		EQU		end2-data2
+;*******************************************************************************
+                    #ROM
+;*******************************************************************************
 
-data3:		DC.B	 $ba, $99, $55, $11, $ca, $dd, $fb, $c8
-end3:  
-delka3:		EQU		end3-data3
+data1               fcb       $42,$80,$c1,$03,$c4
+data2               fcb       60,125,254,255
+data3               fcb       $ba,$99,$55,$11,$ca,$dd,$fb,$c8
 
-_Startup:
-            LDHX   #RAMEnd+1        ; initialize the stack pointer
-            TXS
-            CLI			; enable interrupts
+;*******************************************************************************
 
-			
-			;lda		#$c1
-			;bsr		byteparity
-            ; Insert your code here
-  			
-   			ldhx	#data3
-   			lda		#delka3
-            bsr		checkparity
-            sta		parita
-            NOP
+                    #spauto
 
-mainLoop: 
-            feed_watchdog
-            BRA    mainLoop
+Start               proc
+                    @rsp                          ; initialize the stack pointer
+                    cli                           ; enable interrupts
 
+                    !...      insert your code here
 
+                    ldhx      #data3
+                    lda       #::data3
+                    bsr       CheckParity
+                    sta       parity
 
-checkparity:	
+Loop@@              @cop
+                    bra       Loop@@
 
-;	navr_adr_low 	<---SP+3
-;	navr_adr.high	<---SP+2
-;	delka			<---SP+1
-;	<---SP
+;*******************************************************************************
 
-			psha		;delka
-loop:		lda		,x
-			bsr		byteparity
-			;psha
-			;lda		,x
-			;cmp		1,sp
-			sub		,x
-			bne		error
-			;pula
-			aix		#1
-			dbnz	1,sp,loop
-			;lda		#0
-			ais		#1
-			rts
-						
-error:		;lda		#1
-			;ais		#2
-			ais		#1
-			rts            
-  
-            
-byteparity:	
-;	delka			<---SP+5
-;	navr_adr_low 	<---SP+4
-;	navr_adr.high	<---SP+3
-;	cislo			<---SP+2
-;	cislo			<---SP+1	
-;	<---SP
+                    #spauto
 
-			psha
-			psha
-			ror		1,sp
-			eor		1,sp
-			ror		1,sp
-			eor		1,sp
-			ror		1,sp
-			ror		1,sp
-			eor		1,sp
-			rora	
-			bcs		ones
-			rora		
-			rora	
-			ora		#$bf
-			and		2,sp
-			sta		2,sp
-			bra		continue			
-			
-ones:		rora
-			rora
-			and		#$40
-			ora		2,sp
-			sta		2,sp
-											
-;	delka			<---SP+5
-;	navr_adr_low 	<---SP+4
-;	navr_adr.high	<---SP+3
-;	cislo s bit6	<---SP+2
-;	cislo 			<---SP+1
-;	<---SP
-			
-continue:	sta		1,sp
-			ror		1,sp
-			ror		1,sp
-			eor		1,sp
-			ror		1,sp
-			eor		1,sp
-			ror		1,sp
-			eor		1,sp
-			coma
-			rora
-			rora
-			bcc		zeroes
-			rora								
-			and		#$80
-			ora		2,sp
-			ais		#2
-			rts
-			
-zeroes:		rora
-			ora		#$7f
-			and		2,sp
-			ais		#2
-			rts
+CheckParity         proc
+                    psha      length@@
+Loop@@              lda       ,x
+                    bsr       ByteParity
+                    sub       ,x
+                    sec
+                    bne       Done@@
+                    aix       #1
+                    dbnz      length@@,sp,Loop@@
+Done@@              ais       #:ais
+                    rts
 
-;**************************************************************
-;* spurious - Spurious Interrupt Service Routine.             *
-;*             (unwanted interrupt)                           *
-;**************************************************************
+;*******************************************************************************
 
-spurious:				; placed here so that security value
-			NOP			; does not change all the time.
-			RTI
+                    #spauto
 
-;**************************************************************
-;*                 Interrupt Vectors                          *
-;**************************************************************
+ByteParity          proc
+                    pshhx
+                    #ais
+                    psha:2    num@@,2
+                    tsx
+                    ror       num@@,spx
+                    eor       num@@,spx
+                    ror       num@@,spx
+                    eor       num@@,spx
+                    ror:2     num@@,spx
+                    eor       num@@,spx
+                    rora
+                    bcs       Ones@@
+          ;--------------------------------------
+                    rora:2
+                    ora       #$bf
+                    and       num@@+1,spx
+                    sta       num@@+1,spx
+                    bra       Cont@@
+          ;--------------------------------------
+Ones@@              rora:2
+                    and       #$40
+                    ora       num@@+1,spx
+                    sta       num@@+1,spx
+          ;--------------------------------------
+Cont@@              sta       num@@,spx
+                    ror:2     num@@,spx
+                    eor       num@@,spx
+                    ror       num@@,spx
+                    eor       num@@,spx
+                    ror       num@@,spx
+                    eor       num@@,spx
+                    coma
+                    rora:2
+                    bcc       Zeros@@
+          ;--------------------------------------
+                    rora
+                    and       #$80
+                    ora       num@@+1,spx
+                    bra       Done@@
+          ;--------------------------------------
+Zeros@@             rora
+                    ora       #$7f
+                    and       num@@+1,spx
+          ;--------------------------------------
+Done@@              ais       #:ais
+                    pulhx
+                    rts
 
-            ORG	$FFFA
-
-			DC.W  spurious			;
-			DC.W  spurious			; SWI
-			DC.W  _Startup			; Reset
+                    #sp
+;*******************************************************************************
+                    @vector   Vreset,Start
+;*******************************************************************************
